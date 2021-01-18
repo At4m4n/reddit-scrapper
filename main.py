@@ -24,7 +24,7 @@ def main():
                 try:
                     cake_day, comment_karma, post_karma, user_karma = scrap_user_data(author)
                 except Exception as e:
-                    logging.warning("Some data could not be scrapped, skipping post...")
+                    logging.warning("Userdata could not be scrapped, skipping post...")
                     logging.debug(str(e))
 
                 file.write("UUID=" + uuid.uuid4().hex + ";" +
