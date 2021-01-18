@@ -6,7 +6,7 @@ import logging
 
 LOG_LEVEL = "DEBUG"
 OLD_REDDIT_BASE_URL = "https://old.reddit.com"
-USER_AGENT_HEADER = {'User-agent': 'your bot 0.1'}  # prevent 429
+USER_AGENT_HEADER = {'User-agent': 'your bot 0.1'}  # prevents 429
 
 
 def main():
@@ -17,55 +17,51 @@ def main():
         try:
             page = requests.get(OLD_REDDIT_BASE_URL + "/top/?t=month&limit=100", headers=USER_AGENT_HEADER)
             soup = BeautifulSoup(page.content, 'html.parser')
-            posts_divs = soup.find_all("div", class_="thing")
-            for post_div in posts_divs:
-                username, comments_amount, category, date, post_url, votes_amount = scrap_post_data(post_div)
-                try:
-                    user_page_url = OLD_REDDIT_BASE_URL + "/user/" + username
-                    old_author_page = requests.get(user_page_url, headers=USER_AGENT_HEADER)
-                    old_author_page_soup = BeautifulSoup(old_author_page.content, 'html.parser')
+            posts = soup.find_all("div", class_="thing")
 
-                    cake_day, comment_karma, post_karma, user_karma = scrap_user_data(old_author_page_soup)
+            for post in posts:
+                date, post_url, category, comments_num, author, votes_num = scrap_post_data(post)
+                try:
+                    cake_day, comment_karma, post_karma, user_karma = scrap_user_data(author)
                 except Exception as e:
                     logging.warning("Some data could not be scrapped, skipping post...")
                     logging.debug(str(e))
 
                 file.write("UUID=" + uuid.uuid4().hex + ";" +
                            "POST_URL=" + post_url + ";" +
-                           "AUTHOR_USERNAME=" + username + ";" +
+                           "AUTHOR=" + author + ";" +
                            "USER_KARMA=" + user_karma + ";" +
                            "CAKE_DAY=" + cake_day + ";" +
                            "POST_KARMA=" + post_karma + ";" +
                            "COMMENT_KARMA=" + comment_karma + ";" +
-                           "POST_DATE=" + date + ";" +
-                           "COMMENT_AMOUNT=" + comments_amount + ";" +
-                           "VOTES_AMOUNT=" + votes_amount + ";" +
-                           "POST_CATEGORY=" + category + ";\n")
+                           "DATE=" + date + ";" +
+                           "COMMENTS_AMOUNT=" + comments_num + ";" +
+                           "VOTES_AMOUNT=" + votes_num + ";" +
+                           "CATEGORY=" + category + ";\n")
         finally:
             logging.info("Closing file...")
             file.close()
 
 
-def scrap_post_data(post_div):
-    post_url = OLD_REDDIT_BASE_URL + post_div['data-permalink']
-    author_username = post_div['data-author']
-    post_date = post_div['data-timestamp']
-    comments_amount = post_div['data-comments-count']
-    votes_amount = post_div['data-score']
-    post_category = post_div['data-subreddit-prefixed']
-    return author_username, comments_amount, post_category, post_date, post_url, votes_amount
+def scrap_user_data(author):
+    page_url = OLD_REDDIT_BASE_URL + "/user/" + author
+    page = requests.get(page_url, headers=USER_AGENT_HEADER)
+    soup = BeautifulSoup(page.content, 'html.parser')
 
-
-def scrap_user_data(old_author_page_soup):
-    post_karma = old_author_page_soup.find("span", class_="karma").contents[0]
-    comment_karma = old_author_page_soup.find("span", class_="comment-karma").contents[0]
-    cake_day = old_author_page_soup.find("time")['datetime']
-
-    post_karma_int = int(str(post_karma).replace(',', ''))
-    comment_karma_int = int(str(comment_karma).replace(',', ''))
-    user_karma = str(post_karma_int + comment_karma_int)
-
+    post_karma = soup.find("span", class_="karma").contents[0]
+    comment_karma = soup.find("span", class_="comment-karma").contents[0]
+    cake_day = soup.find("time")['datetime']
+    user_karma = str(int(post_karma.replace(',', '')) + int(comment_karma.replace(',', '')))
     return cake_day, comment_karma, post_karma, user_karma
+
+
+def scrap_post_data(post):
+    return str(datetime.fromtimestamp((int(post['data-timestamp']) / 1000))), \
+           OLD_REDDIT_BASE_URL + post['data-permalink'], \
+           post['data-subreddit-prefixed'], \
+           post['data-comments-count'], \
+           post['data-author'], \
+           post['data-score'],
 
 
 if __name__ == '__main__':
